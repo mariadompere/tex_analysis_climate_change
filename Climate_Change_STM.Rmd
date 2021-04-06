@@ -1,0 +1,284 @@
+
+### Replication code for STM topic modeling using US Congress speeches and newspaper articles on climate change. 
+
+```{r}
+#load packages
+library(stm)
+library(ggplot2)
+library(dplyr)
+library(tibble)
+library(dplyr)
+library(ggplot2)
+library(stringr)
+library(magrittr)
+library(lubridate)
+library(readtext)
+library(quanteda)
+library(RColorBrewer)
+library(igraph)
+library(quanteda)
+library(data.table)
+library(zoo)
+
+```
+
+#Load data and tokenize the corpus 
+```{r}
+#load the corpus data contaning congressional speeches and newspaper text on climate change 
+texts <- read.csv("Texts_Climate_Change.csv")
+
+#transform data to corpus 
+texts$speech<-as.character(texts$speech)
+tx.corp <- corpus(texts, text_field = 'speech') 
+
+
+#Tokenize to clean the corpus and delete non-informative words
+toks <- tokens(tx.corp,
+               remove_punct = TRUE,
+               remove_symbols = TRUE,
+               remove_numbers = TRUE,
+               remove_hyphens = TRUE)
+toks <- tokens_remove(toks,stopwords(language = "en",source = "smart"))
+toks <- tokens_remove(toks, c("mr", "Senators","behalf", "introducing", "yield",
+                              "gentleman", "gentlewoman", "h.r", "chairman","president", "speaker","rt", "u.", "RT","t.co","bill","act","#","@","http","\\"," https:","//","amendment*","committee","floor","senate","senator","madam","forward","committee"))
+
+
+#create a DFM
+dfmat_txt<- dfm(toks, stem = TRUE, remove_url=TRUE)
+
+#keep only words occuring >=10 times and in >=2 docs.
+dfmat_txt<- dfm_trim(dfmat_txt, min_termfreq= 10, min_docfreq = 10) 
+
+# 20 top words 
+topfeatures(dfmat_txt, 20)  
+
+```
+
+
+#Now we will select the optimum number of topics for the STM model
+```{r}
+library(stm)
+floo.stm<- quanteda::convert(dfmat_txt, to = "stm", docvars = docvars(tx.corp))
+
+#In order to identify the adequate number on topics we run a series of STM models and evaluate the output based on semantic coherence and exclusivity of the topics since a “topic that is both cohesive and exclusive is more likely to be semantically useful” (Roberts et al. 2016)
+K <-c(4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24)
+selectK  <- searchK(floo.stm$documents, floo.stm$vocab, K, max.em.its = 75, 
+prevalence = ~ party + s(year), data = floo.stm$meta, init.type = "Spectral", seed=123)
+
+```
+
+```{r}
+library(stm)
+#Based on the results 9 is the most appropiate N.topics. We create the STM model
+texts_STM <- stm(floo.stm$documents,floo.stm$vocab, 
+                 data = floo.stm$meta,K = 9,
+                 max.em.its = 75, prevalence =~party +s(year),
+              init.type = "Spectral", 
+                 seed=123,
+                 verbose = FALSE)
+
+
+#we can individually look at the healdout likelihood output 
+heldout <- make.heldout(floo.stm$documents,floo.stm$vocab)
+documents <- heldout$documents
+vocab <- heldout$vocab
+meta <- floo.stm$meta
+
+eval.heldout(texts_STM, heldout$missing)
+
+```
+
+
+# Summary visualization
+```{r}
+
+# we can now visualize our STM output 
+plot(texts_STM, type = "summary", labeltype = c("frex"))
+plot(texts_STM, type = "summary", labeltype = c("score"))
+```
+
+```{r}
+plot(texts_STM, type = "hist", labeltype = c("frex"))
+```
+
+#### Understanding the content of the topics
+```{r}
+
+# We can explore the top occurring words per topic by creating a dataframe
+words_topics <- data.frame(t(labelTopics(texts_STM, n = 10)$frex))
+summary(words_topics)
+
+
+ #Topic 1:  
+findThoughts(texts_STM , 
+             texts = texts$speech,
+             n = 10, #DOC
+             topics = 1) 
+
+ #TOPIC 2:
+findThoughts(texts_STM , 
+             texts = texts$speech,
+             n = 10, #DOC
+             topics = 2) 
+
+#TOPIC 3""
+findThoughts(texts_STM , 
+             texts = texts$speech,
+             n = 30, 
+             topics = 3) 
+
+ #TOPIC 4:
+findThoughts(texts_STM , 
+             texts = texts$speech,
+             n = 50, #DOC
+             topics = 4)
+
+#Topic 5 Emissions # Pipeline
+findThoughts(texts_STM , 
+             texts = texts$speech,
+             n = 100, #DOC
+             topics = 5) 
+
+#TOPIC 6 :
+findThoughts(texts_STM , 
+             texts = texts$speech,
+             n = 11, #DOC
+             topics = 6) 
+
+
+#TOPIC 7 :
+findThoughts(texts_STM , 
+             texts = texts$speech,
+             n = 11, #DOC
+             topics = 7) 
+
+#TOPIC 8 :
+findThoughts(texts_STM , 
+             texts = texts$speech,
+             n = 11, #DOC
+             topics = 8) 
+
+#TOPIC 9 :
+findThoughts(texts_STM , 
+             texts = texts$speech,
+             n = 11, #DOC
+             topics = 9)
+
+```
+
+ 
+### Estimating relationships between metadata and topics
+```{r}
+
+#Now we explore how prevalence of topics varies across documents according to document covariates (metadata).We examine the relationship between the liberal/conservative rating variable, and the first 10 topics, as well as the year variable.  
+predict_topics<-estimateEffect(formula = 1:9 ~ party + s(year), 
+                               stmobj = texts_STM , 
+                               metadata = floo.stm$meta, 
+                               uncertainty = "Global")
+
+#sort by partisanship
+coef <- se <- rep(NA, 6)
+for (i in 1:6){
+    coef[i] <- predict_topics$parameters[[i]][[1]]$est[2]
+    se[i] <- sqrt(predict_topics$parameters[[i]][[1]]$vcov[2,2])
+}
+
+df <- data.frame(topic = 1:6, coef=coef, se=se)
+df <- df[order(df$coef),]
+head(df[order(df$coef),])
+
+```
+
+```{r}
+#summary which topics are predicted as being addressed by a Republican or Democrat
+summary(predict_topics)
+summary(predict_topics, topics = 1) 
+summary(predict_topics, topics = 2) 
+summary(predict_topics, topics = 3) 
+summary(predict_topics, topics = 4) 
+summary(predict_topics, topics = 5) 
+summary(predict_topics, topics = 6) 
+summary(predict_topics, topics = 7) 
+```
+
+#Include the topics into the dataframe
+
+```{r}
+#include the topics into a new DFM
+theta_texts <- make.dt(texts_STM, meta=floo.stm$meta)
+speech<-as.data.frame(texts$speech)
+colnames(speech)<-"speech"
+theta_texts<-cbind(theta_texts,speech)
+head(theta_texts)
+```
+
+```{r}
+# which are the documents with the highest value for each Topic?
+# and the 2nd amd 3rd largest one?
+maxn <- function(n) function(x) order(x, decreasing = TRUE)[n]
+rownames(theta_texts)[apply(theta_texts, 2, maxn(1))]
+rownames(theta_texts)[apply(theta_texts, 2, maxn(2))]
+rownames(theta_texts)[apply(theta_texts , 2, maxn(3))]
+
+#What the documents most associated with different topics for Republicans, Democracts and media 
+theta_texts[party=="R", docnum[order(Topic1, decreasing=TRUE)][1:6]]
+theta_texts[party=="D", docnum[order(Topic1, decreasing=TRUE)][1:6]]
+theta_texts[party=="R", docnum[order(Topic2, decreasing=TRUE)][1:6]]
+theta_texts[party=="R", docnum[order(Topic3, decreasing=TRUE)][1:6]]
+theta_texts[party=="M", docnum[order(Topic4, decreasing=TRUE)][1:6]]
+theta_texts[party=="R", docnum[order(Topic5, decreasing=TRUE)][1:6]]
+theta_texts[party=="R", docnum[order(Topic6, decreasing=TRUE)][1:6]]
+theta_texts[party=="R", docnum[order(Topic7, decreasing=TRUE)][1:6]]
+```
+
+
+```{r}
+#transform date to extract year to create the visualizations
+theta_texts<-transform(theta_texts, monyear=paste(year, month, sep="-"))
+theta_texts$monyear<-as.yearmon(format(theta_texts$monyear), "%Y-%m")
+```
+
+
+```{r}
+# Plot the relationship between topics and liberal/conservative scale
+
+plot(predict_topics, covariate = "party", topics = c(1,2,3,4,5,6,7,8,9),
+     model = texts_STM, method = "difference",
+     cov.value1 = "D", cov.value2 = "R",
+     xlab = "More Conservative ....... More Liberal",
+     main = "Effect of Liberal vs. Conservative in Topic Prediction",
+     xlim = c(-.1, .1), labeltype = "custom",
+     custom.labels = c("Consensus","Energy","Water","Consequences","Pipeline","Executive","Econ","Programs","International"))
+
+```
+
+```{r}
+ plot(predict_topics, covariate = "year", model = texts_STM,
+ method = "continuous", xlab = "year", moderator = "party",
+ moderator.value = "D", linecol = "blue", ylim = c(-1, 1),
+ printlegend = F)
+ plot(predict_topics, covariate = "year", model = texts_STM,
+method = "continuous", xlab = "Year", moderator = "Party",
+ moderator.value = "R", linecol = "red", add = T,
+ printlegend = F)
+ legend(2000, -0.7, c("Democratic", "Republican"),
+ lwd = 2, col = c("blue", "red"))
+abline(h=0, col="black")
+```
+
+```{r}
+
+plot.estimateEffect(predict_topics,                 
+                covariate="year",
+                model=predict_topics,
+                main = "Topic Evolution",
+                method="continuous",
+                xlab="Year",
+                ylab="Expected Topic Proportions",
+                ylim = c(-0.2,1),
+                labeltype = "numbers",
+                ci.level= 0.,
+                printlegend=T)
+legend("topright",legend=c("1","2","3","4","5","6","7"),lty=1)
+```
+
