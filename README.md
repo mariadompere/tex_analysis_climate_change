@@ -1,5 +1,5 @@
 # tex_analysis_climate_change
-The repository contains a code to run an unsupervised text analysis using R package STM on US Congressional speeches and newspaper articles addressing the issue of climate change. 
+The repository contains a code to run an unsupervised topic modeling and quantitative text analysis using R package STM on US Congressional speeches and newspaper articles addressing the issue of climate change. 
 
 There were two selection criteria for our corpus; that the texts/speeches contained specific mentions to "climate change" or "global warming", and that these  were produced between January 2008 and September 2016. The timeframe of analysis is delineated by the two presidential terms of Barack Obama.
 
