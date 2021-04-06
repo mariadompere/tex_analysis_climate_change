@@ -9,5 +9,7 @@ The corpus contains the following:
 * Bullet list Newspaper Articles: We downloaded news articles from ProQuest from the Washington Post, The New York Times and Wall Street Journal as thr most influential print news sources. The unit of analysis is article per journal and day. Our initial sample contained unique 4385 articles.
 
 References: 
-* Nested bullet Gentzkow, M., Shapiro, J. M., & Taddy, M. (2019). Measuring group differences in high‐dimensional choices: method and application to congressional speech. Econometrica, 87(4), 1307-1340.
-* Nested bullet Park, J. Y. (2021). When do politicians grandstand? Measuring message politics in committee hearings. The Journal of Politics, 83(1), 000-000.
+* Bullet list
+              * Nested bullet Gentzkow, M., Shapiro, J. M., & Taddy, M. (2019). Measuring group differences in high‐dimensional choices: method and application to congressional speech. Econometrica, 87(4), 1307-1340.
+* Bullet list
+              * Nested bulletPark, J. Y. (2021). When do politicians grandstand? Measuring message politics in committee hearings. The Journal of Politics, 83(1), 000-000.
